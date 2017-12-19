@@ -398,9 +398,9 @@ class TankWriteNodeHandler(object):
             new_wn.setSelected(False)
         
             # copy across file & proxy knobs (if we've defined a proxy template):
-            new_wn["file"].setValue(sg_wn["cached_path"].evaluate())
+            new_wn["file"].setValue(sg_wn["cached_path"].value())
             if sg_wn["proxy_render_template"].value():
-                new_wn["proxy"].setValue(sg_wn["tk_cached_proxy_path"].evaluate())
+                new_wn["proxy"].setValue(sg_wn["tk_cached_proxy_path"].value())
             else:
                 new_wn["proxy"].setValue("")
 
