@@ -579,7 +579,20 @@ class TankWriteNodeHandler(object):
         """
         self.__on_knob_changed()
 
-    def on_node_created_gizmo_callback(self):
+    def __is_scene_fully_loaded(self):
+        """
+        "As far as I can tell, when a Nuke script is being loaded from disk, Nuke's "root" node is the last in the stack to be created."
+        https://github.com/shotgunsoftware/tk-nuke-writenode/pull/22
+        This method use this assumption to determine if we are currently loading a scene.
+        If that is the case, the reference to the root node will be broken.
+        """
+        try:
+            nuke.root().name()
+            return True
+        except ValueError:
+            return False
+
+    def on_node_created_gizmo_callback(self, node_name=None):
         """
         Called when an instance of a Shotgun Write Node is created.  This can
         be when the node is created for the first time or when it is loaded
@@ -593,17 +606,27 @@ class TankWriteNodeHandler(object):
         # delay the callback by a short period of time -- 100 milliseconds --
         # before allowing it to actually be called. This gives Nuke enough
         # time to complete its root-node initialization and all is well.
-        if not self.__nuke_10_setup_timer:
-            self.__nuke_10_setup_timer = QtCore.QTimer()
-            self.__nuke_10_setup_timer.setSingleShot(True)
-            self.__nuke_10_setup_timer.timeout.connect(
-                functools.partial(
-                    self.__setup_new_node,
-                    nuke.thisNode(),
-                ),
-            )
 
-        self.__nuke_10_setup_timer.start(100)
+        # If this is the first time this function is being called, we'll resolve the node affected by the callback.
+        # Sadly when being run during a script loading, the python handle to the node won't be usable afterward.
+        # For this reason, we'll store the name instead and resolve the python handle after the loading.
+        if node_name is None:
+            node_name = nuke.thisNode().name()
+
+        if self.__is_scene_fully_loaded():
+            self._app.log_debug('Scene is fully loaded, updating node "{0}"'.format(node_name))
+            node = nuke.toNode(node_name)
+            self.__setup_new_node(node)
+        else:
+            self._app.log_debug('Scene is not fully loaded, waiting before updating "{0}"'.format(node_name))
+            if not self.__nuke_10_setup_timer:
+                self.__nuke_10_setup_timer = QtCore.QTimer()
+                self.__nuke_10_setup_timer.setSingleShot(True)
+                self.__nuke_10_setup_timer.timeout.connect(
+                    functools.partial(self.on_node_created_gizmo_callback, node_name)
+                )
+
+            self.__nuke_10_setup_timer.start(100)
 
     def on_compute_path_gizmo_callback(self):
         """
