@@ -62,7 +62,10 @@ class TankWriteNodeHandler(object):
         # flags to track when the render and proxy paths are being updated.
         self.__is_updating_render_path = False
         self.__is_updating_proxy_path = False
-        self.__nuke_10_setup_timer = None
+        
+        # Dict (k,v) where k is a TankWrite node name and v is a timer associated to it.
+        # Timer allow us to deffer update call when scene is loading.
+        self.__nuke_10_setup_timer = {}
 
         self.populate_profiles_from_settings()
             
@@ -619,14 +622,14 @@ class TankWriteNodeHandler(object):
             self.__setup_new_node(node)
         else:
             self._app.log_debug('Scene is not fully loaded, waiting before updating "{0}"'.format(node_name))
-            if not self.__nuke_10_setup_timer:
-                self.__nuke_10_setup_timer = QtCore.QTimer()
-                self.__nuke_10_setup_timer.setSingleShot(True)
-                self.__nuke_10_setup_timer.timeout.connect(
-                    functools.partial(self.on_node_created_gizmo_callback, node_name)
-                )
+            timer = self.__nuke_10_setup_timer.get(node_name)
+            if timer is None:
+                timer = QtCore.QTimer()
+                timer.setSingleShot(True)
+                timer.timeout.connect(functools.partial(self.on_node_created_gizmo_callback, node_name))
+                self.__nuke_10_setup_timer[node_name] = timer
 
-            self.__nuke_10_setup_timer.start(100)
+            timer.start(100)
 
     def on_compute_path_gizmo_callback(self):
         """
